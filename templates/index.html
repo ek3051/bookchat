@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BookChat - Git-Backed Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #messageForm {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        #messageInput {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0052a3;
+        }
+        #messages {
+            border: 1px solid #ddd;
+            padding: 10px;
+            min-height: 200px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .message {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .message:last-child {
+            border-bottom: none;
+        }
+        .message .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .message .content {
+            margin-left: 10px;
+        }
+        .source-tag {
+            font-size: 0.8em;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 10px;
+        }
+        .source-github {
+            background-color: #2da44e;
+            color: white;
+        }
+        .source-database {
+            background-color: #0066cc;
+            color: white;
+        }
+        #searchForm {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        #searchInput {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #stats {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>BookChat</h1>
+        
+        <form id="messageForm">
+            <input type="text" id="messageInput" placeholder="Enter a message" required>
+            <button type="submit">Send</button>
+        </form>
+
+        <form id="searchForm">
+            <input type="text" id="searchInput" placeholder="Search messages...">
+            <button type="submit">Search</button>
+            <button type="button" id="clearSearch">Clear</button>
+        </form>
+
+        <div id="messages"></div>
+
+        <div id="stats"></div>
+    </div>
+
+    <script>
+        // Test user ID (we'll implement proper authentication later)
+        const TEST_USER_ID = 1;
+
+        // Function to format date
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+
+        // Function to load messages
+        async function loadMessages() {
+            try {
+                const response = await fetch('http://localhost:8080/messages');
+                const data = await response.json();
+                displayMessages(data.messages);
+                loadStats();
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+
+        // Function to display messages
+        function displayMessages(messages) {
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = messages
+                .map(msg => `
+                    <div class="message">
+                        <div class="header">
+                            <span>
+                                <strong>${msg.username || 'User'}</strong>
+                                <span class="source-tag source-${msg.source}">${msg.source}</span>
+                            </span>
+                            <span>${formatDate(msg.created_at)}</span>
+                        </div>
+                        <div class="content">${msg.content}</div>
+                    </div>
+                `)
+                .join('');
+        }
+
+        // Function to send a message
+        async function sendMessage(content) {
+            try {
+                const response = await fetch('http://localhost:8080/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: TEST_USER_ID,
+                        content: content
+                    })
+                });
+                
+                if (response.ok) {
+                    loadMessages(); // Reload messages after sending
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+            }
+        }
+
+        // Function to search messages
+        async function searchMessages(query) {
+            try {
+                const response = await fetch(`http://localhost:8080/messages/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                displayMessages(data.messages);
+            } catch (error) {
+                console.error('Error searching messages:', error);
+            }
+        }
+
+        // Function to load stats
+        async function loadStats() {
+            try {
+                const response = await fetch('http://localhost:8080/messages/stats');
+                const stats = await response.json();
+                
+                document.getElementById('stats').innerHTML = `
+                    <h3>Statistics</h3>
+                    <p>Total Messages: ${stats.total_messages}</p>
+                    <p>Total Authors: ${stats.total_authors}</p>
+                    <p>Average Message Length: ${Math.round(stats.average_length)} characters</p>
+                `;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Form submit handler for messages
+        document.getElementById('messageForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+            
+            if (content) {
+                await sendMessage(content);
+                input.value = ''; // Clear input after sending
+            }
+        });
+
+        // Form submit handler for search
+        document.getElementById('searchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('searchInput');
+            const query = input.value.trim();
+            
+            if (query) {
+                await searchMessages(query);
+            }
+        });
+
+        // Clear search handler
+        document.getElementById('clearSearch').addEventListener('click', () => {
+            document.getElementById('searchInput').value = '';
+            loadMessages();
+        });
+
+        // Load messages on page load
+        loadMessages();
+    </script>
+</body>
+</html>
